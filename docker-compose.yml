@@ -1,0 +1,7 @@
+services:
+  flynn:
+    build: .
+    container_name: flynn-binyag
+    ports:
+      - "6662:80"
+    restart: unless-stopped
