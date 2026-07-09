@@ -422,6 +422,19 @@ img { max-width: 100%; display: block; }
   margin: 14px 0 0;
 }
 
+.section-aside {
+  display: inline-block;
+  margin: 10px 0 2px;
+  padding: 6px 16px;
+  border-radius: 999px;
+  background: linear-gradient(120deg, #fce4f1, var(--pink-soft) 55%, #eadcfc);
+  border: 1px solid var(--line);
+  color: var(--pink-deep);
+  font-weight: 700;
+  font-size: 0.82rem;
+  letter-spacing: 0.01em;
+}
+
 /* alt (tinted) section spans full width, content stays centered */
 .section-alt {
   max-width: 100%;
