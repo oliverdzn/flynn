@@ -107,7 +107,7 @@ document.addEventListener("DOMContentLoaded", () => {
   renderLandmarks();
 
   renderQRCode("qr-church-waze", "https://www.waze.com/ul?ll=15.0956409%2C120.6485541&navigate=yes&zoom=17");
-  renderQRCode("qr-church-gmaps", "https://www.google.com/maps/search/?api=1&query=15.0956409%2C120.6485541");
+  renderQRCode("qr-church-gmaps", "https://maps.app.goo.gl/5EctbTBjNRFkuyFG8");
 
   renderQRCode("qr-resort-waze", "https://www.waze.com/ul?ll=15.0535156%2C120.6402261&navigate=yes&zoom=17");
   renderQRCode("qr-resort-gmaps", "https://maps.app.goo.gl/yw5xvFV6weHmTxjc6");
