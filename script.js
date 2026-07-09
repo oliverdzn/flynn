@@ -106,11 +106,11 @@ function initReveal() {
 document.addEventListener("DOMContentLoaded", () => {
   renderLandmarks();
 
-  renderQRCode("qr-church-waze", "https://waze.com/ul?ll=15.0956409,120.6485541&navigate=yes");
-  renderQRCode("qr-church-gmaps", "https://www.google.com/maps/place/San+Vicente+Ferrer+Parish/@15.0956461,120.6459792,17z/data=!3m1!4b1!4m6!3m5!1s0x3396f1003b335287:0x90b424a426cb522c!8m2!3d15.0956409!4d120.6485541");
+  renderQRCode("qr-church-waze", "https://www.waze.com/ul?ll=15.0956409%2C120.6485541&navigate=yes&zoom=17");
+  renderQRCode("qr-church-gmaps", "https://www.google.com/maps/search/?api=1&query=15.0956409%2C120.6485541");
 
-  renderQRCode("qr-resort-waze", "https://waze.com/ul?ll=15.0535156,120.6402261&navigate=yes");
-  renderQRCode("qr-resort-gmaps", "https://www.google.com/maps/place/Jerlen+Farm+and+Resort/@15.0535156,120.6402261,17z");
+  renderQRCode("qr-resort-waze", "https://www.waze.com/ul?ll=15.0535156%2C120.6402261&navigate=yes&zoom=17");
+  renderQRCode("qr-resort-gmaps", "https://www.google.com/maps/search/?api=1&query=15.0535156%2C120.6402261");
 
   initReveal();
 });
