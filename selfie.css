@@ -1,0 +1,125 @@
+/* =========================================================================
+   Selfie / Check-In page — reuses palette & fonts from style.css
+   ========================================================================= */
+
+.selfie-body {
+  min-height: 100vh;
+  background:
+    radial-gradient(700px 380px at 100% 0%, rgba(251, 217, 236, 0.65) 0%, transparent 60%),
+    radial-gradient(600px 320px at 0% 100%, rgba(216, 197, 248, 0.55) 0%, transparent 60%),
+    linear-gradient(180deg, #fffafd 0%, var(--blush) 60%, #f4ecfd 100%);
+}
+
+.selfie-page {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: clamp(40px, 8vw, 72px) 20px 60px;
+}
+
+.selfie-head {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.selfie-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+/* the square preview / capture area */
+.selfie-frame {
+  position: relative;
+  width: 100%;
+  max-width: 440px;
+  aspect-ratio: 1 / 1;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--white);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-lg);
+}
+
+.selfie-frame canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.selfie-frame canvas[hidden] { display: none; }
+
+.selfie-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 0;
+  padding: 20px;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  font-style: italic;
+  color: var(--ink-soft);
+  line-height: 1.4;
+}
+
+.selfie-frame.has-photo .selfie-placeholder { display: none; }
+
+.selfie-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.selfie-actions[hidden] { display: none; }
+
+.selfie-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px 26px;
+  border: none;
+  border-radius: 14px;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  min-height: 56px;
+  transition: transform 0.12s ease, box-shadow 0.25s ease, filter 0.2s ease;
+}
+
+.selfie-btn:hover { filter: brightness(1.05); }
+.selfie-btn:active { transform: scale(0.97); }
+
+.selfie-btn-primary {
+  color: var(--white);
+  background: linear-gradient(135deg, #f472b6 0%, var(--pink-deep) 100%);
+  box-shadow: 0 10px 24px -8px var(--pink-glow);
+}
+
+.selfie-btn-secondary {
+  color: var(--violet-deep);
+  background: var(--white);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-sm);
+}
+
+.selfie-btn .btn-icon { font-size: 1.2rem; }
+
+.selfie-status {
+  min-height: 1.2em;
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--ink-soft);
+  text-align: center;
+}
+
+.selfie-status.is-error { color: var(--pink-deep); font-weight: 600; }

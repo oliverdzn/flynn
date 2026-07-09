@@ -12,7 +12,7 @@ const landmarks = [
   {
     image: "road2.JPG",
     alt: "Right turn at the corner before Mega Dike",
-    caption: "Pumasok sa kaliwa (left) na kanto bago umakyat sa Mega Dike."
+    caption: "Dumeretso sa Del Rosario proper hanggang makita ang daang ito sa kaliwa (left) bago makarating sa Megadike."
   },
   {
     image: "road3.JPG",

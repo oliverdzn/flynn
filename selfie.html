@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Take a Selfie — Olivia Flynn's Christening & 1st Birthday</title>
+<meta name="theme-color" content="#fdf6fb">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="selfie.css">
+</head>
+<body class="selfie-body">
+
+  <main class="selfie-page">
+    <div class="selfie-head">
+      <span class="section-kicker">Check In</span>
+      <h1 class="section-title">Take a Selfie 🦋</h1>
+      <div class="title-ornament" aria-hidden="true"><span></span>✦<span></span></div>
+      <p class="section-note">I-frame ang inyong selfie at i-share sa amin!</p>
+    </div>
+
+    <div class="selfie-stage">
+      <div class="selfie-frame" id="selfieFrame">
+        <canvas id="selfieCanvas" width="1080" height="1080"></canvas>
+        <p class="selfie-placeholder" id="selfiePlaceholder">🦋<br>Your framed photo will appear here</p>
+      </div>
+
+      <input type="file" id="cameraInput" accept="image/*" capture="user" hidden>
+
+      <div class="selfie-actions" id="captureActions">
+        <button type="button" class="selfie-btn selfie-btn-primary" id="captureBtn">
+          <span class="btn-icon" aria-hidden="true">📸</span>
+          <span>Take a Selfie</span>
+        </button>
+      </div>
+
+      <div class="selfie-actions" id="resultActions" hidden>
+        <button type="button" class="selfie-btn selfie-btn-primary" id="shareBtn" hidden>
+          <span class="btn-icon" aria-hidden="true">💌</span>
+          <span>Share</span>
+        </button>
+        <button type="button" class="selfie-btn selfie-btn-primary" id="downloadBtn">
+          <span class="btn-icon" aria-hidden="true">⬇️</span>
+          <span>Download</span>
+        </button>
+        <button type="button" class="selfie-btn selfie-btn-secondary" id="retakeBtn">
+          <span class="btn-icon" aria-hidden="true">🔄</span>
+          <span>Retake</span>
+        </button>
+      </div>
+
+      <p class="selfie-status" id="selfieStatus" aria-live="polite"></p>
+    </div>
+  </main>
+
+  <script src="selfie.js"></script>
+</body>
+</html>
