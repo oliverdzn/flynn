@@ -1,13 +1,17 @@
 /* =========================================================================
    Olivia's Birthday Wall — view routing, selfie capture/compression,
-   Firestore guestbook write + live listener, balloon gallery, modal.
+   Firestore guestbook write + live listener, floating bubble pond, modal.
    ========================================================================= */
 import { db } from "./firebase-config.js";
 import {
   collection, addDoc, serverTimestamp, query, orderBy, onSnapshot
 } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js";
 
-const PHOTO_SIZE = 400;
+// Bubbles never display larger than ~130px (modal) on screen, so 280px
+// source photos already give 2x headroom for retina — smaller than the
+// original 400px means smaller Firestore payloads and cheaper decodes
+// per bubble, which matters once dozens of guests have submitted.
+const PHOTO_SIZE = 280;
 const TARGET_BYTES = 150 * 1024;
 const MAX_QUALITY_STEPS = [0.7, 0.6, 0.5, 0.4, 0.3];
 
@@ -29,6 +33,8 @@ const views = document.querySelectorAll(".view");
 function switchView(id) {
   views.forEach(v => v.classList.toggle("active", v.id === id));
   window.scrollTo({ top: 0, behavior: "instant" });
+  if (id === "view-gallery") startBubbleLoop();
+  else stopBubbleLoop();
 }
 
 document.getElementById("joinBtn").addEventListener("click", () => switchView("view-capture"));
@@ -187,50 +193,200 @@ function setFormStatus(message, type) {
   formStatus.classList.toggle("is-success", type === "success");
 }
 
-/* ===================== GALLERY: LIVE LISTENER ===================== */
-const balloonField = document.getElementById("balloonField");
+/* ===================== GALLERY: BUBBLE POND ===================== */
+// Only MAX_ACTIVE_BUBBLES ever exist in the DOM/animating at once, no matter
+// how many guests have submitted — everyone else waits in entryQueue and
+// gets their turn as bubbles drift off-screen or get popped. This keeps
+// performance flat whether there are 10 guests or 200.
+const pond = document.getElementById("bubblePond");
 const galleryStatus = document.getElementById("galleryStatus");
-let renderedCount = 0;
 
-function renderBalloon(id, data) {
-  const empty = balloonField.querySelector(".balloon-empty");
-  if (empty) empty.remove();
+const MAX_ACTIVE_BUBBLES = 14;
+const BUBBLE_MIN = 72;
+const BUBBLE_MAX = 112;
+const SPEED_MIN = 18;
+const SPEED_MAX = 34;
+const WANDER_ACCEL = 16;
 
-  const btn = document.createElement("button");
-  btn.type = "button";
-  btn.className = "balloon";
-  btn.dataset.id = id;
+// Continuous drifting motion is JS-driven (requestAnimationFrame), so the
+// CSS prefers-reduced-motion media query alone can't cover it — check it
+// here too and keep bubbles static (spawned in place, still tappable).
+const PREFERS_REDUCED_MOTION = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  const duration = (4 + Math.random() * 3).toFixed(2) + "s";
-  const delay = (-(Math.random() * 5)).toFixed(2) + "s";
-  const rotA = (-4 - Math.random() * 3).toFixed(1) + "deg";
-  const rotB = (3 + Math.random() * 3).toFixed(1) + "deg";
-  btn.style.setProperty("--float-dur", duration);
-  btn.style.setProperty("--float-delay", delay);
-  btn.style.setProperty("--rot-a", rotA);
-  btn.style.setProperty("--rot-b", rotB);
-  btn.style.marginTop = Math.round(Math.random() * 22) + "px";
+const entryQueue = [];
+const activeBubbles = new Map();
+let hasReceivedInitialSnapshot = false;
+let rafHandle = null;
+let lastFrameTime = null;
 
-  const safeName = escapeHtml(data.name || "A guest");
-  btn.innerHTML = `
-    <span class="balloon-body">
-      <span class="balloon-shine" aria-hidden="true"></span>
-      <span class="balloon-photo-ring"><img src="${data.photoBase64}" alt="${safeName}'s selfie" loading="lazy"></span>
-      <span class="balloon-knot"></span>
-    </span>
-    <svg class="balloon-string"><use href="#balloon-string"/></svg>
-    <span class="balloon-name">${safeName}</span>
-  `;
-
-  btn.addEventListener("click", () => openModal(btn, data));
-  balloonField.appendChild(btn);
-  renderedCount++;
+function isGalleryActive() {
+  return document.getElementById("view-gallery").classList.contains("active");
 }
 
 function escapeHtml(str) {
   const div = document.createElement("div");
   div.textContent = str;
   return div.innerHTML;
+}
+
+function enqueueEntry(id, data) {
+  if (activeBubbles.has(id) || entryQueue.some(e => e.id === id)) return;
+  entryQueue.push({ id, data });
+  clearEmptyState();
+  if (isGalleryActive()) trySpawnFromQueue();
+}
+
+function trySpawnFromQueue() {
+  if (!isGalleryActive()) return;
+  while (entryQueue.length && activeBubbles.size < MAX_ACTIVE_BUBBLES) {
+    spawnBubble(entryQueue.shift());
+  }
+}
+
+function randomEdgeSpawn(size, boundsW, boundsH) {
+  const margin = size * 0.6;
+  const edge = Math.floor(Math.random() * 4);
+  const speed = SPEED_MIN + Math.random() * (SPEED_MAX - SPEED_MIN);
+  const inward = speed * 0.6 + Math.random() * speed * 0.4;
+  const lateral = (Math.random() - 0.5) * speed;
+
+  if (edge === 0) return { x: Math.random() * boundsW, y: -margin, vx: lateral, vy: inward };
+  if (edge === 1) return { x: boundsW + margin, y: Math.random() * boundsH, vx: -inward, vy: lateral };
+  if (edge === 2) return { x: Math.random() * boundsW, y: boundsH + margin, vx: lateral, vy: -inward };
+  return { x: -margin, y: Math.random() * boundsH, vx: inward, vy: lateral };
+}
+
+// Used instead of randomEdgeSpawn when motion is reduced: bubbles never
+// drift, so they need to spawn already inside the visible bounds rather
+// than at the edges expecting to drift inward.
+function randomStaticSpawn(size, boundsW, boundsH) {
+  const margin = size * 0.5;
+  const x = margin + Math.random() * Math.max(boundsW - size, 0);
+  const y = margin + Math.random() * Math.max(boundsH - size, 0);
+  return { x, y, vx: 0, vy: 0 };
+}
+
+function spawnBubble(entry) {
+  const { id, data } = entry;
+  if (activeBubbles.has(id)) return;
+
+  const rect = pond.getBoundingClientRect();
+  const size = Math.round(BUBBLE_MIN + Math.random() * (BUBBLE_MAX - BUBBLE_MIN));
+  const { x, y, vx, vy } = PREFERS_REDUCED_MOTION
+    ? randomStaticSpawn(size, rect.width, rect.height)
+    : randomEdgeSpawn(size, rect.width, rect.height);
+
+  const el = document.createElement("button");
+  el.type = "button";
+  el.className = "bubble";
+  el.style.width = size + "px";
+  el.style.height = size + "px";
+  el.style.transform = `translate(${x}px, ${y}px)`;
+
+  const safeName = escapeHtml(data.name || "A guest");
+  el.innerHTML = `
+    <span class="bubble-inner">
+      <span class="bubble-shell">
+        <span class="bubble-shine" aria-hidden="true"></span>
+        <span class="bubble-photo-ring"><img src="${data.photoBase64}" alt="${safeName}'s selfie" loading="eager" decoding="async"></span>
+      </span>
+    </span>
+  `;
+
+  const bubble = { id, data, el, x, y, vx, vy, size, popped: false };
+  el.addEventListener("click", () => popBubble(bubble));
+  pond.appendChild(el);
+  activeBubbles.set(id, bubble);
+}
+
+function despawnBubble(id, wasPopped) {
+  const b = activeBubbles.get(id);
+  if (!b) return;
+  activeBubbles.delete(id);
+  b.el.remove();
+  if (!wasPopped) entryQueue.push({ id: b.id, data: b.data });
+  trySpawnFromQueue();
+  maybeShowEmptyState();
+}
+
+function popBubble(b) {
+  if (b.popped) return;
+  b.popped = true;
+  b.el.classList.add("is-popping");
+  b.el.addEventListener("animationend", () => despawnBubble(b.id, true), { once: true });
+  openModal(b.data);
+}
+
+function stepPhysics(dt) {
+  const rect = pond.getBoundingClientRect();
+  activeBubbles.forEach(b => {
+    if (b.popped) return;
+
+    b.vx += (Math.random() - 0.5) * WANDER_ACCEL * dt;
+    b.vy += (Math.random() - 0.5) * WANDER_ACCEL * dt;
+
+    const speed = Math.hypot(b.vx, b.vy);
+    if (speed > SPEED_MAX) {
+      b.vx = (b.vx / speed) * SPEED_MAX;
+      b.vy = (b.vy / speed) * SPEED_MAX;
+    } else if (speed < SPEED_MIN * 0.4) {
+      const angle = Math.random() * Math.PI * 2;
+      b.vx += Math.cos(angle) * SPEED_MIN * 0.4;
+      b.vy += Math.sin(angle) * SPEED_MIN * 0.4;
+    }
+
+    b.x += b.vx * dt;
+    b.y += b.vy * dt;
+    b.el.style.transform = `translate(${b.x}px, ${b.y}px)`;
+
+    // half the bubble's own size = the point where the whole circle has
+    // fully cleared the edge, i.e. genuinely "out of camera"
+    const margin = b.size * 0.5;
+    if (b.x < -margin || b.x > rect.width + margin || b.y < -margin || b.y > rect.height + margin) {
+      despawnBubble(b.id, false);
+    }
+  });
+}
+
+function loopFrame(ts) {
+  if (lastFrameTime == null) lastFrameTime = ts;
+  const dt = Math.min((ts - lastFrameTime) / 1000, 0.1);
+  lastFrameTime = ts;
+  stepPhysics(dt);
+  rafHandle = requestAnimationFrame(loopFrame);
+}
+
+function startBubbleLoop() {
+  trySpawnFromQueue();
+  if (PREFERS_REDUCED_MOTION || rafHandle != null) return;
+  lastFrameTime = null;
+  rafHandle = requestAnimationFrame(loopFrame);
+}
+
+function stopBubbleLoop() {
+  if (rafHandle != null) {
+    cancelAnimationFrame(rafHandle);
+    rafHandle = null;
+  }
+}
+
+function maybeShowEmptyState() {
+  if (activeBubbles.size === 0 && entryQueue.length === 0 && hasReceivedInitialSnapshot) {
+    showEmptyState();
+  }
+}
+
+function showEmptyState() {
+  if (pond.querySelector(".bubble-empty")) return;
+  const p = document.createElement("p");
+  p.className = "bubble-empty";
+  p.textContent = "No greetings yet — be the first! 🎈";
+  pond.appendChild(p);
+}
+
+function clearEmptyState() {
+  const empty = pond.querySelector(".bubble-empty");
+  if (empty) empty.remove();
 }
 
 function startGalleryListener() {
@@ -240,26 +396,17 @@ function startGalleryListener() {
     snapshot => {
       galleryStatus.textContent = "";
       galleryStatus.classList.remove("is-error");
-      if (renderedCount === 0 && snapshot.empty) {
-        showEmptyState();
-      }
+      hasReceivedInitialSnapshot = true;
       snapshot.docChanges().forEach(change => {
-        if (change.type === "added") renderBalloon(change.doc.id, change.doc.data());
+        if (change.type === "added") enqueueEntry(change.doc.id, change.doc.data());
       });
+      maybeShowEmptyState();
     },
     err => {
       galleryStatus.textContent = "Couldn't load the birthday wall. Check your connection.";
       galleryStatus.classList.add("is-error");
     }
   );
-}
-
-function showEmptyState() {
-  if (balloonField.querySelector(".balloon-empty")) return;
-  const p = document.createElement("p");
-  p.className = "balloon-empty";
-  p.textContent = "No greetings yet — be the first! 🎈";
-  balloonField.appendChild(p);
 }
 
 /* ===================== MODAL ===================== */
@@ -269,26 +416,17 @@ const modalClose = document.getElementById("modalClose");
 const modalPhoto = document.getElementById("modalPhoto");
 const modalName = document.getElementById("modalName");
 const modalMessage = document.getElementById("modalMessage");
-let activeBalloon = null;
 
-function openModal(balloonEl, data) {
-  activeBalloon = balloonEl;
-  balloonEl.classList.add("is-paused");
-
+function openModal(data) {
   modalPhoto.src = data.photoBase64;
   modalPhoto.alt = (data.name || "Guest") + "'s selfie";
   modalName.textContent = data.name || "A guest";
   modalMessage.textContent = data.message || "";
-
   modal.hidden = false;
 }
 
 function closeModal() {
   modal.hidden = true;
-  if (activeBalloon) {
-    activeBalloon.classList.remove("is-paused");
-    activeBalloon = null;
-  }
 }
 
 modalClose.addEventListener("click", closeModal);
