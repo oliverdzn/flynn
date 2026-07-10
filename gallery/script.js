@@ -21,6 +21,10 @@ function withTimeout(promise, ms, message) {
 }
 
 /* ===================== VIEW ROUTING ===================== */
+// TEMP: gallery is the default view while we tune the layout. Set back to
+// "view-landing" (and remove the "Start Over" button in index.html) when done.
+const DEFAULT_VIEW = "view-gallery";
+
 const views = document.querySelectorAll(".view");
 function switchView(id) {
   views.forEach(v => v.classList.toggle("active", v.id === id));
@@ -32,6 +36,7 @@ document.getElementById("addAnotherBtn").addEventListener("click", () => {
   resetCaptureState();
   switchView("view-capture");
 });
+document.getElementById("backToLandingBtn").addEventListener("click", () => switchView("view-landing"));
 
 /* ===================== STEP 1: SELFIE CAPTURE ===================== */
 const cameraInput = document.getElementById("cameraInput");
@@ -293,4 +298,5 @@ document.addEventListener("keydown", e => {
 });
 
 /* ===================== INIT ===================== */
+switchView(DEFAULT_VIEW);
 startGalleryListener();

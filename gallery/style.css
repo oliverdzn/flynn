@@ -316,12 +316,18 @@ button { font-family: inherit; }
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 14px;
   padding: 18px 20px;
   background: rgba(255, 249, 251, 0.85);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   border-bottom: 1px solid rgba(255, 158, 196, 0.25);
+}
+
+.gallery-header-actions {
+  display: flex;
+  gap: 10px;
 }
 
 .gallery-title {

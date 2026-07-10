@@ -39,7 +39,7 @@
   </div>
 
   <!-- ===================== LANDING ===================== -->
-  <section class="view active" id="view-landing">
+  <section class="view" id="view-landing">
     <div class="view-inner center-stage">
       <p class="eyebrow">Olivia Flynn Dizon · 1st Birthday</p>
       <h1 class="hero-title">Send Olivia a<br>Birthday Greeting! 🎈</h1>
@@ -114,17 +114,23 @@
     </div>
   </section>
 
-  <!-- ===================== GALLERY ===================== -->
-  <section class="view" id="view-gallery">
+  <!-- ===================== GALLERY (TEMP: default view while we tune the layout — see DEFAULT_VIEW in script.js) ===================== -->
+  <section class="view active" id="view-gallery">
     <header class="gallery-header">
       <div>
         <h2 class="gallery-title">Olivia's Birthday Wall 🦋</h2>
         <p class="gallery-sub">Tap a balloon to read the message</p>
       </div>
-      <button type="button" class="btn btn-primary btn-small" id="addAnotherBtn">
-        <span aria-hidden="true">➕</span>
-        <span>Add Yours</span>
-      </button>
+      <div class="gallery-header-actions">
+        <button type="button" class="btn btn-secondary btn-small" id="backToLandingBtn">
+          <span aria-hidden="true">👋</span>
+          <span>Start Over</span>
+        </button>
+        <button type="button" class="btn btn-primary btn-small" id="addAnotherBtn">
+          <span aria-hidden="true">➕</span>
+          <span>Add Yours</span>
+        </button>
+      </div>
     </header>
 
     <p class="gallery-status" id="galleryStatus" aria-live="polite"></p>
