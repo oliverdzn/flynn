@@ -209,10 +209,11 @@ function renderBalloon(id, data) {
   const safeName = escapeHtml(data.name || "A guest");
   btn.innerHTML = `
     <span class="balloon-body">
+      <span class="balloon-shine" aria-hidden="true"></span>
       <span class="balloon-photo-ring"><img src="${data.photoBase64}" alt="${safeName}'s selfie" loading="lazy"></span>
       <span class="balloon-knot"></span>
     </span>
-    <span class="balloon-string"></span>
+    <svg class="balloon-string"><use href="#balloon-string"/></svg>
     <span class="balloon-name">${safeName}</span>
   `;
 
