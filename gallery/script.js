@@ -5,7 +5,7 @@
 import { db } from "./firebase-config.js";
 import {
   collection, addDoc, serverTimestamp, query, orderBy, onSnapshot
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+} from "https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js";
 
 const PHOTO_SIZE = 400;
 const TARGET_BYTES = 150 * 1024;
