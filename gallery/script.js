@@ -1,6 +1,7 @@
 /* =========================================================================
    Olivia's Birthday Wall — view routing, selfie capture/compression,
-   Firestore guestbook write + live listener, floating bubble pond, modal.
+   Firestore guestbook write + live listener, fixed bubble pool
+   (no drifting animation), modal.
    ========================================================================= */
 import { db } from "./firebase-config.js";
 import {
@@ -25,16 +26,16 @@ function withTimeout(promise, ms, message) {
 }
 
 /* ===================== VIEW ROUTING ===================== */
-// TEMP: gallery is the default view while we tune the layout. Set back to
-// "view-landing" (and remove the "Start Over" button in index.html) when done.
+// The birthday wall is the landing experience: guests arriving from the
+// main site's "View the Birthday Wall" button see the bubbles right away,
+// then tap "Add Yours" if they want to submit their own greeting.
 const DEFAULT_VIEW = "view-gallery";
 
 const views = document.querySelectorAll(".view");
 function switchView(id) {
   views.forEach(v => v.classList.toggle("active", v.id === id));
   window.scrollTo({ top: 0, behavior: "instant" });
-  if (id === "view-gallery") startBubbleLoop();
-  else stopBubbleLoop();
+  if (id === "view-gallery") repackBubbles();
 }
 
 document.getElementById("joinBtn").addEventListener("click", () => switchView("view-capture"));
@@ -42,7 +43,6 @@ document.getElementById("addAnotherBtn").addEventListener("click", () => {
   resetCaptureState();
   switchView("view-capture");
 });
-document.getElementById("backToLandingBtn").addEventListener("click", () => switchView("view-landing"));
 
 /* ===================== STEP 1: SELFIE CAPTURE ===================== */
 const cameraInput = document.getElementById("cameraInput");
@@ -193,35 +193,25 @@ function setFormStatus(message, type) {
   formStatus.classList.toggle("is-success", type === "success");
 }
 
-/* ===================== GALLERY: BUBBLE POND ===================== */
-// Only MAX_ACTIVE_BUBBLES ever exist in the DOM/animating at once, no matter
-// how many guests have submitted — everyone else waits in entryQueue and
-// gets their turn as bubbles drift off-screen or get popped. This keeps
-// performance flat whether there are 10 guests or 200.
+/* ===================== GALLERY: FIXED BUBBLE POOL ===================== */
+// Every guest always has a bubble — there's no queue and no cap. Instead,
+// whenever the guest list changes (or the viewport resizes), we recompute
+// a single layout pass for ALL bubbles at once: bubble diameter shrinks as
+// the count grows so everyone fits the visible pond without scrolling,
+// like balls settling into a bowl. No CSS animation and no
+// requestAnimationFrame loop are involved in showing a bubble, which
+// rules out any animation/rAF timing issue leaving them invisible.
 const pond = document.getElementById("bubblePond");
 const galleryStatus = document.getElementById("galleryStatus");
 
-const MAX_ACTIVE_BUBBLES = 14;
-const BUBBLE_MIN = 72;
-const BUBBLE_MAX = 112;
-const SPEED_MIN = 18;
-const SPEED_MAX = 34;
-const WANDER_ACCEL = 16;
+const MIN_SIZE = 56;
+const MAX_SIZE = 120;
+const PACK_EFFICIENCY = 0.72; // conservative fudge factor for a loose, organic (non-hex-tight) scatter
+const PLACEMENT_ATTEMPTS = 40;
 
-// Continuous drifting motion is JS-driven (requestAnimationFrame), so the
-// CSS prefers-reduced-motion media query alone can't cover it — check it
-// here too and keep bubbles static (spawned in place, still tappable).
-const PREFERS_REDUCED_MOTION = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-const entryQueue = [];
-const activeBubbles = new Map();
+const guests = new Map(); // id -> data
 let hasReceivedInitialSnapshot = false;
-let rafHandle = null;
-let lastFrameTime = null;
-
-function isGalleryActive() {
-  return document.getElementById("view-gallery").classList.contains("active");
-}
+let resizeTimer = null;
 
 function escapeHtml(str) {
   const div = document.createElement("div");
@@ -229,151 +219,103 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
-function enqueueEntry(id, data) {
-  if (activeBubbles.has(id) || entryQueue.some(e => e.id === id)) return;
-  entryQueue.push({ id, data });
-  clearEmptyState();
-  if (isGalleryActive()) trySpawnFromQueue();
+function isGalleryActive() {
+  return document.getElementById("view-gallery").classList.contains("active");
 }
 
-function trySpawnFromQueue() {
-  if (!isGalleryActive()) return;
-  while (entryQueue.length && activeBubbles.size < MAX_ACTIVE_BUBBLES) {
-    spawnBubble(entryQueue.shift());
+function computeBubbleSize(n, w, h) {
+  const area = Math.max(w * h, 1);
+  const idealArea = (area * PACK_EFFICIENCY) / Math.max(n, 1);
+  const idealDiameter = 2 * Math.sqrt(idealArea / Math.PI);
+  return Math.max(MIN_SIZE, Math.min(MAX_SIZE, Math.round(idealDiameter)));
+}
+
+// Best-candidate random placement: for each bubble, sample a handful of
+// random spots and keep whichever is farthest from every bubble already
+// placed. Guaranteed to terminate and place every bubble even if the pond
+// is too small to fit them all without any overlap at all.
+function packCircles(n, size, w, h) {
+  const r = size / 2;
+  const spanW = Math.max(w - size, 0);
+  const spanH = Math.max(h - size, 0);
+  const placed = [];
+
+  for (let i = 0; i < n; i++) {
+    let best = null;
+    let bestScore = -Infinity;
+
+    for (let attempt = 0; attempt < PLACEMENT_ATTEMPTS; attempt++) {
+      const x = r + Math.random() * spanW;
+      const y = r + Math.random() * spanH;
+
+      if (placed.length === 0) { best = { x, y }; break; }
+
+      let minDist = Infinity;
+      for (const p of placed) {
+        const d = Math.hypot(x - p.x, y - p.y) - (r + p.r);
+        if (d < minDist) minDist = d;
+      }
+      if (minDist > bestScore) { bestScore = minDist; best = { x, y }; }
+      if (minDist > 6) break; // good enough gap, stop sampling early
+    }
+
+    placed.push({ x: best.x, y: best.y, r });
   }
+
+  return placed.map(p => ({ left: Math.round(p.x - r), top: Math.round(p.y - r) }));
 }
 
-function randomEdgeSpawn(size, boundsW, boundsH) {
-  const margin = size * 0.6;
-  const edge = Math.floor(Math.random() * 4);
-  const speed = SPEED_MIN + Math.random() * (SPEED_MAX - SPEED_MIN);
-  const inward = speed * 0.6 + Math.random() * speed * 0.4;
-  const lateral = (Math.random() - 0.5) * speed;
-
-  if (edge === 0) return { x: Math.random() * boundsW, y: -margin, vx: lateral, vy: inward };
-  if (edge === 1) return { x: boundsW + margin, y: Math.random() * boundsH, vx: -inward, vy: lateral };
-  if (edge === 2) return { x: Math.random() * boundsW, y: boundsH + margin, vx: lateral, vy: -inward };
-  return { x: -margin, y: Math.random() * boundsH, vx: inward, vy: lateral };
-}
-
-// Used instead of randomEdgeSpawn when motion is reduced: bubbles never
-// drift, so they need to spawn already inside the visible bounds rather
-// than at the edges expecting to drift inward.
-function randomStaticSpawn(size, boundsW, boundsH) {
-  const margin = size * 0.5;
-  const x = margin + Math.random() * Math.max(boundsW - size, 0);
-  const y = margin + Math.random() * Math.max(boundsH - size, 0);
-  return { x, y, vx: 0, vy: 0 };
-}
-
-function spawnBubble(entry) {
-  const { id, data } = entry;
-  if (activeBubbles.has(id)) return;
-
-  const rect = pond.getBoundingClientRect();
-  const size = Math.round(BUBBLE_MIN + Math.random() * (BUBBLE_MAX - BUBBLE_MIN));
-  const { x, y, vx, vy } = PREFERS_REDUCED_MOTION
-    ? randomStaticSpawn(size, rect.width, rect.height)
-    : randomEdgeSpawn(size, rect.width, rect.height);
-
+function createBubbleElement(id, data, size) {
   const el = document.createElement("button");
   el.type = "button";
   el.className = "bubble";
   el.style.width = size + "px";
   el.style.height = size + "px";
-  el.style.transform = `translate(${x}px, ${y}px)`;
 
   const safeName = escapeHtml(data.name || "A guest");
   el.innerHTML = `
-    <span class="bubble-inner">
-      <span class="bubble-shell">
-        <span class="bubble-shine" aria-hidden="true"></span>
-        <span class="bubble-photo-ring"><img src="${data.photoBase64}" alt="${safeName}'s selfie" loading="eager" decoding="async"></span>
-      </span>
+    <span class="bubble-shell">
+      <span class="bubble-shine" aria-hidden="true"></span>
+      <span class="bubble-photo-ring"><img src="${data.photoBase64}" alt="${safeName}'s selfie" loading="eager" decoding="async"></span>
     </span>
   `;
-
-  const bubble = { id, data, el, x, y, vx, vy, size, popped: false };
-  el.addEventListener("click", () => popBubble(bubble));
-  pond.appendChild(el);
-  activeBubbles.set(id, bubble);
+  el.addEventListener("click", () => popBubble(id));
+  return el;
 }
 
-function despawnBubble(id, wasPopped) {
-  const b = activeBubbles.get(id);
-  if (!b) return;
-  activeBubbles.delete(id);
-  b.el.remove();
-  if (!wasPopped) entryQueue.push({ id: b.id, data: b.data });
-  trySpawnFromQueue();
-  maybeShowEmptyState();
-}
+function repackBubbles() {
+  if (!isGalleryActive()) return;
 
-function popBubble(b) {
-  if (b.popped) return;
-  b.popped = true;
-  b.el.classList.add("is-popping");
-  b.el.addEventListener("animationend", () => despawnBubble(b.id, true), { once: true });
-  openModal(b.data);
-}
+  const n = guests.size;
+  if (n === 0) {
+    pond.innerHTML = "";
+    if (hasReceivedInitialSnapshot) showEmptyState();
+    return;
+  }
 
-function stepPhysics(dt) {
+  clearEmptyState();
+
   const rect = pond.getBoundingClientRect();
-  activeBubbles.forEach(b => {
-    if (b.popped) return;
+  const size = computeBubbleSize(n, rect.width, rect.height);
+  const positions = packCircles(n, size, rect.width, rect.height);
 
-    b.vx += (Math.random() - 0.5) * WANDER_ACCEL * dt;
-    b.vy += (Math.random() - 0.5) * WANDER_ACCEL * dt;
-
-    const speed = Math.hypot(b.vx, b.vy);
-    if (speed > SPEED_MAX) {
-      b.vx = (b.vx / speed) * SPEED_MAX;
-      b.vy = (b.vy / speed) * SPEED_MAX;
-    } else if (speed < SPEED_MIN * 0.4) {
-      const angle = Math.random() * Math.PI * 2;
-      b.vx += Math.cos(angle) * SPEED_MIN * 0.4;
-      b.vy += Math.sin(angle) * SPEED_MIN * 0.4;
-    }
-
-    b.x += b.vx * dt;
-    b.y += b.vy * dt;
-    b.el.style.transform = `translate(${b.x}px, ${b.y}px)`;
-
-    // half the bubble's own size = the point where the whole circle has
-    // fully cleared the edge, i.e. genuinely "out of camera"
-    const margin = b.size * 0.5;
-    if (b.x < -margin || b.x > rect.width + margin || b.y < -margin || b.y > rect.height + margin) {
-      despawnBubble(b.id, false);
-    }
+  pond.innerHTML = "";
+  let i = 0;
+  guests.forEach((data, id) => {
+    const el = createBubbleElement(id, data, size);
+    el.style.left = positions[i].left + "px";
+    el.style.top = positions[i].top + "px";
+    pond.appendChild(el);
+    i++;
   });
 }
 
-function loopFrame(ts) {
-  if (lastFrameTime == null) lastFrameTime = ts;
-  const dt = Math.min((ts - lastFrameTime) / 1000, 0.1);
-  lastFrameTime = ts;
-  stepPhysics(dt);
-  rafHandle = requestAnimationFrame(loopFrame);
-}
-
-function startBubbleLoop() {
-  trySpawnFromQueue();
-  if (PREFERS_REDUCED_MOTION || rafHandle != null) return;
-  lastFrameTime = null;
-  rafHandle = requestAnimationFrame(loopFrame);
-}
-
-function stopBubbleLoop() {
-  if (rafHandle != null) {
-    cancelAnimationFrame(rafHandle);
-    rafHandle = null;
-  }
-}
-
-function maybeShowEmptyState() {
-  if (activeBubbles.size === 0 && entryQueue.length === 0 && hasReceivedInitialSnapshot) {
-    showEmptyState();
-  }
+function popBubble(id) {
+  const data = guests.get(id);
+  if (!data) return;
+  guests.delete(id);
+  repackBubbles();
+  openModal(data);
 }
 
 function showEmptyState() {
@@ -389,6 +331,11 @@ function clearEmptyState() {
   if (empty) empty.remove();
 }
 
+window.addEventListener("resize", () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(repackBubbles, 150);
+});
+
 function startGalleryListener() {
   const q = query(collection(db, "guestbook"), orderBy("createdAt", "asc"));
   onSnapshot(
@@ -397,10 +344,16 @@ function startGalleryListener() {
       galleryStatus.textContent = "";
       galleryStatus.classList.remove("is-error");
       hasReceivedInitialSnapshot = true;
+
+      let changed = false;
       snapshot.docChanges().forEach(change => {
-        if (change.type === "added") enqueueEntry(change.doc.id, change.doc.data());
+        if (change.type === "added" && !guests.has(change.doc.id)) {
+          guests.set(change.doc.id, change.doc.data());
+          changed = true;
+        }
       });
-      maybeShowEmptyState();
+      if (changed) repackBubbles();
+      else if (guests.size === 0) showEmptyState();
     },
     err => {
       galleryStatus.textContent = "Couldn't load the birthday wall. Check your connection.";

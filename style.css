@@ -374,6 +374,26 @@ img { max-width: 100%; display: block; }
   color: var(--violet-deep);
 }
 
+.hero-wall-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 26px;
+  padding: 15px 28px;
+  border-radius: 999px;
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 0.98rem;
+  color: var(--white);
+  text-decoration: none;
+  background: linear-gradient(135deg, var(--pink) 0%, var(--violet-deep) 100%);
+  box-shadow: 0 12px 28px -8px var(--violet-glow);
+  transition: transform 0.12s ease, box-shadow 0.25s ease, filter 0.2s ease;
+}
+
+.hero-wall-btn:hover { filter: brightness(1.06); }
+.hero-wall-btn:active { transform: scale(0.97); }
+
 /* wave divider at hero's bottom edge */
 .hero-wave {
   position: absolute;
@@ -818,5 +838,6 @@ img { max-width: 100%; display: block; }
   .direction-card,
   .landmark-card,
   .landmark-image-wrap img,
-  .direction-btn { transition: none; }
+  .direction-btn,
+  .hero-wall-btn { transition: none; }
 }

@@ -1,5 +1,7 @@
 /* =========================================================================
-   Olivia's Birthday Wall — live guest gallery
+   Olivia's Birthday Wall — live guest gallery. Fixed bubble pool, no
+   drifting animation — bubbles are laid out once, like balls settling
+   into a bowl, rather than continuously floating.
    Pastel pink & gold, butterfly motif. Mobile-first.
    ========================================================================= */
 
@@ -377,38 +379,21 @@ button { font-family: inherit; }
 }
 
 /* =========================================================================
-   BUBBLES
-   A bubble is two layers: the outer .bubble is positioned continuously by
-   JS via transform:translate() (physics). The inner .bubble-inner carries
-   the CSS enter/pop scale animations, so the two transforms never fight
-   over the same element.
+   BUBBLES — fixed, no animation. Every active guest gets a bubble, sized
+   and positioned by a single repack pass (on add/remove/resize) so they
+   all fit the visible pond at once, like balls settling into a bowl,
+   instead of continuously floating. This also sidesteps any possibility
+   of a CSS-animation/rAF timing issue leaving bubbles invisible.
    ========================================================================= */
 .bubble {
   position: absolute;
-  top: 0;
-  left: 0;
+  display: block;
   border-radius: 50%;
   cursor: pointer;
   background: none;
   border: none;
   padding: 0;
-  will-change: transform;
 }
-
-.bubble-inner {
-  display: block;
-  position: relative;
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  animation: bubbleEnter 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-.bubble.is-popping .bubble-inner {
-  animation: bubblePop 0.4s cubic-bezier(0.4, 0, 0.2, 1) both;
-}
-
-.bubble.is-popping { pointer-events: none; }
 
 .bubble-shell {
   display: block;
@@ -458,17 +443,6 @@ button { font-family: inherit; }
   border-radius: 50%;
   object-fit: cover;
   border: 2px solid var(--card-bg);
-}
-
-@keyframes bubbleEnter {
-  from { opacity: 0; transform: scale(0.35); }
-  to   { opacity: 1; transform: scale(1); }
-}
-
-@keyframes bubblePop {
-  0%   { opacity: 1; transform: scale(1); }
-  45%  { opacity: 1; transform: scale(1.3); }
-  100% { opacity: 0; transform: scale(0.15); }
 }
 
 /* =========================================================================
@@ -566,6 +540,6 @@ button { font-family: inherit; }
    ========================================================================= */
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
-  .bg-bfly, .bubble-inner { animation: none; }
+  .bg-bfly { animation: none; }
   .modal-backdrop, .modal-card { animation: none; }
 }
